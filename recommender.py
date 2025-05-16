@@ -1,90 +1,75 @@
-from enum import global_enum_repr
-
 import pandas as pd
-from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
-df = pd.read_csv('tracks.csv')
+# -------- STEP 1: Load and Clean Data --------
+df = pd.read_csv('tracks .csv').dropna().reset_index(drop=True)
 
-# Preview basic info
-print("Initial shape:", df.shape)
-print("\nMissing values:\n", df.isnull().sum())
-
-# Drop rows with missing values (optional: only drop critical columns if needed)
-df_clean = df.dropna()
-
-# Drop irrelevant columns (depending on what's in your file — adjust as needed)
-columns_to_drop = ['id', 'uri', 'track_href', 'analysis_url', 'type', 'Unnamed: 0']
-df_clean = df_clean.drop(columns=[col for col in columns_to_drop if col in df_clean.columns])
-
-# Reset index
-df_clean = df_clean.reset_index(drop=True)
-
-# Show cleaned DataFrame info
-print("\nCleaned shape:", df_clean.shape)
-print(df_clean.head())
-
-# Save cleaned data (optional)
-df_clean.to_csv('tracks_cleaned.csv', index=False)
-
-# LIMIT rows to reduce memory usage
-df = pd.read_csv('tracks_cleaned.csv').dropna().reset_index(drop=True)
-
-# SAMPLE subset of songs for similarity computation
-df = df.sample(n=5000, random_state=42).reset_index(drop=True)
-
-# -------- STEP 1: Select features --------
+# Select features and target
 features = [
-    'danceability', 'energy', 'loudness', 'speechiness',
-    'acousticness', 'instrumentalness', 'liveness',
-    'valence', 'tempo'
+    'danceability', 'energy', 'loudness', 'speechiness', 'acousticness',
+    'instrumentalness', 'liveness', 'valence', 'tempo'
 ]
+target = 'popularity'
 
-# Drop any rows missing these features
-df = df.dropna(subset=features)
+# Drop rows with missing data in required columns
+df = df.dropna(subset=features + [target])
 
-# -------- STEP 2: Normalize features --------
-from sklearn.preprocessing import StandardScaler
+# Optional: EDA - Correlation Heatmap
+sns.heatmap(df[features + [target]].corr(), annot=True, cmap='coolwarm')
+plt.title('Feature Correlation with Popularity')
+plt.show()
 
+# -------- STEP 2: Feature Scaling --------
 scaler = StandardScaler()
-scaled_features = scaler.fit_transform(df[features])
+X = scaler.fit_transform(df[features])
+y = df[target]
 
-# -------- STEP 3: Compute cosine similarity --------
-from sklearn.metrics.pairwise import cosine_similarity
+# -------- STEP 3: Train-Test Split --------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
 
-similarity_matrix = cosine_similarity(scaled_features)
+# -------- STEP 4: Model Training --------
+lr = LinearRegression()
+rf = RandomForestRegressor(random_state=42)
 
+lr.fit(X_train, y_train)
+rf.fit(X_train, y_train)
 
-# -------- STEP 4: Recommend function --------
-def recommend(song_index, num_recommendations=5):
-    print(f"\nSelected song: {df.iloc[song_index]['track_name']} by {df.iloc[song_index]['artists']}")
-    input_genre = df.iloc[song_index]['track_genre']
+# -------- STEP 5: Make Predictions --------
+lr_preds = lr.predict(X_test)
+rf_preds = rf.predict(X_test)
 
-    sim_scores = list(enumerate(similarity_matrix[song_index]))
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:num_recommendations + 1]
+# -------- STEP 6: Evaluation Function --------
+def evaluate(y_true, y_pred, label="Model"):
+    print(f"\n{label} Evaluation:")
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    print(f"RMSE: {rmse:.2f}")
+    print(f"MAE: {mean_absolute_error(y_true, y_pred):.2f}")
+    print(f"R² Score: {r2_score(y_true, y_pred):.2f}")
 
-    print("\nRecommended songs:")
-    for idx, score in sim_scores:
-        name = df.iloc[idx]['track_name']
-        artist = df.iloc[idx]['artists']
-        genre = df.iloc[idx]['track_genre']
-        print(f"- {name} by {artist} [{genre}] (score: {score:.2f})")
+# Evaluate both models
+evaluate(y_test, lr_preds, "Linear Regression")
+evaluate(y_test, rf_preds, "Random Forest")
 
-    return sim_scores, input_genre
+# -------- STEP 7: Show Sample Predictions --------
+comparison_df = pd.DataFrame({
+    'track_name': df.iloc[y_test.index]['track_name'].values,
+    'actual_popularity': y_test.values,
+    'predicted_lr': lr_preds.round(1),
+    'predicted_rf': rf_preds.round(1)
+})
 
+print("\nSample Predictions (Linear Regression vs. Random Forest):")
+print(comparison_df.head())
 
-def precision_at_k(recommended_indices, input_genre):
-    relevant = 0
-    for idx, _ in recommended_indices:
-        if df.iloc[idx]['track_genre'] == input_genre:
-            relevant += 1
-    return relevant / len(recommended_indices)
-
-
-if __name__ == '__main__':
-    song_index = 0  # Try any valid index
-    recommended, genre = recommend(song_index=song_index, num_recommendations=5)
-    precision = precision_at_k(recommended, genre)
-    print(f"\nPrecision@5: {precision:.2f}")
-
-
+# Optional: Save results to CSV
+# comparison_df.to_csv("model_predictions_comparison.csv", index=False)
