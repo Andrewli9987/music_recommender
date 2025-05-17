@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 # Load and clean dataset
-df = pd.read_csv('tracks .csv').dropna().reset_index(drop=True)
+df = pd.read_csv('tracks.csv').dropna().reset_index(drop=True)
 
 #features used, and the target of prediction
 features = [
@@ -59,6 +59,28 @@ def evaluate(y_true, y_pred, label="Model"):
 # Evaluate both models
 evaluate(y_test, lr_preds, "Linear Regression")
 evaluate(y_test, rf_preds, "Random Forest")
+
+# Scatter plot for both Linear regression and Random Forest
+plt.figure(figsize=(10, 5))
+
+# Linear Regression
+plt.subplot(1, 2, 1)
+sns.scatterplot(x=y_test, y=lr_preds, alpha=0.5)
+plt.plot([0, 100], [0, 100], color='red', linestyle='--')  # Ideal line
+plt.xlabel("Actual Popularity")
+plt.ylabel("Predicted Popularity")
+plt.title("Linear Regression")
+
+# Random Forest
+plt.subplot(1, 2, 2)
+sns.scatterplot(x=y_test, y=rf_preds, alpha=0.5)
+plt.plot([0, 100], [0, 100], color='red', linestyle='--')  # Ideal line
+plt.xlabel("Actual Popularity")
+plt.ylabel("Predicted Popularity")
+plt.title("Random Forest")
+
+plt.tight_layout()
+plt.show()
 
 #Outputs Predictions
 comparison_df = pd.DataFrame({
