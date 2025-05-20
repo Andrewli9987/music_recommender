@@ -5,13 +5,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_absolute_error, r2_score, root_mean_squared_error
 import seaborn as sns
 import plotly.express as px
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
-# ── Page config & CSS ───────────────────────────────────────────────────────
+# Page config & CSS
 st.set_page_config(
     page_title="Music Popularity Explorer",
     layout="wide",
@@ -141,16 +141,13 @@ with tab2:
         placeholder.empty()
 
         preds = st.session_state.model.predict(st.session_state.X_test)
-        rmse = mean_squared_error(st.session_state.y_test, preds, squared=False)
+        rmse = root_mean_squared_error(st.session_state.y_test, preds)
         mae  = mean_absolute_error(st.session_state.y_test, preds)
         r2   = r2_score(st.session_state.y_test, preds)
         c1, c2, c3 = st.columns(3)
-        c1.metric("RMSE", f"{rmse:.2f}",
-                  help="Root Mean Squared Error: sqrt of average squared error")
-        c2.metric("MAE", f"{mae:.2f}",
-                  help="Mean Absolute Error: average absolute error")
-        c3.metric("R²", f"{r2:.2f}",
-                  help="R² (explained variance): closer to 1 is better")
+        c1.metric("RMSE", f"{rmse:.2f}", help="Root Mean Squared Error: sqrt of average squared error")
+        c2.metric("MAE",  f"{mae:.2f}", help="Mean Absolute Error: average absolute error")
+        c3.metric("R²",   f"{r2:.2f}", help="R² (explained variance): closer to 1 is better")
 
         fig2 = px.scatter(
             x=st.session_state.y_test,
@@ -188,8 +185,11 @@ with tab3:
                 float(df[feat].mean())
             )
         if st.button("Predict Single Track"):
-            x = np.array([inputs[f] for f in st.session_state.X_test.columns]).reshape(1, -1)
+            x_df = pd.DataFrame([inputs[f] for f in st.session_state.X_test.columns],
+                                columns=st.session_state.X_test.columns)
             if st.session_state.scaler:
-                x = st.session_state.scaler.transform(x)
-            pop = st.session_state.model.predict(x)[0]
+                x_scaled = st.session_state.scaler.transform(x_df)
+            else:
+                x_scaled = x_df.values
+            pop = st.session_state.model.predict(x_scaled)[0]
             st.metric("Predicted Popularity", f"{pop:.1f}")
