@@ -11,7 +11,7 @@ import plotly.express as px
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
-# Page config & CSS
+# ── Page config & CSS ───────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Music Popularity Explorer",
     layout="wide",
@@ -185,8 +185,7 @@ with tab3:
                 float(df[feat].mean())
             )
         if st.button("Predict Single Track"):
-            x_df = pd.DataFrame([inputs[f] for f in st.session_state.X_test.columns],
-                                columns=st.session_state.X_test.columns)
+            x_df = pd.DataFrame([inputs])[st.session_state.X_test.columns]
             if st.session_state.scaler:
                 x_scaled = st.session_state.scaler.transform(x_df)
             else:
