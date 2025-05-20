@@ -79,8 +79,6 @@ run = st.sidebar.button(
 # ── Header ──────────────────────────────────────────────────────────────────
 col1, col2 = st.columns([1, 6])
 with col1:
-    # Optional: drop in a 'spotify_logo.png' for branding
-    # st.image("spotify_logo.png", width=60)
     pass
 with col2:
     st.markdown("""
@@ -119,15 +117,18 @@ with tab2:
     if run:
         with placeholder.container():
             with st.spinner("Training model..."):
-                X = df[FEATURES].copy()
+                train_df, test_df = train_test_split(
+                    df, test_size=test_size, random_state=42
+                )
+                X_train = train_df[FEATURES]
+                X_test = test_df[FEATURES]
+                y_train = train_df[TARGET]
+                y_test = test_df[TARGET]
                 scaler = None
                 if normalize:
                     scaler = StandardScaler()
-                    X = pd.DataFrame(scaler.fit_transform(X), columns=FEATURES)
-                y = df[TARGET]
-                X_train, X_test, y_train, y_test = train_test_split(
-                    X, y, test_size=test_size, random_state=42
-                )
+                    X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=FEATURES)
+                    X_test = pd.DataFrame(scaler.transform(X_test), columns=FEATURES)
                 model = (
                     RandomForestRegressor(random_state=42)
                     if model_choice == "Random Forest"
@@ -136,23 +137,26 @@ with tab2:
                 model.fit(X_train, y_train)
                 st.session_state.model = model
                 st.session_state.scaler = scaler
-                st.session_state.X_test = X_test
-                st.session_state.y_test = y_test
+                st.session_state.test_df = test_df
         placeholder.empty()
 
-        preds = st.session_state.model.predict(st.session_state.X_test)
-        rmse = root_mean_squared_error(st.session_state.y_test, preds)
-        mae  = mean_absolute_error(st.session_state.y_test, preds)
-        r2   = r2_score(st.session_state.y_test, preds)
+        preds = st.session_state.model.predict(
+            st.session_state.test_df[FEATURES]
+        )
+        y_true = st.session_state.test_df[TARGET]
+        rmse = root_mean_squared_error(y_true, preds)
+        mae  = mean_absolute_error(y_true, preds)
+        r2   = r2_score(y_true, preds)
         c1, c2, c3 = st.columns(3)
         c1.metric("RMSE", f"{rmse:.2f}", help="Root Mean Squared Error: sqrt of average squared error")
         c2.metric("MAE",  f"{mae:.2f}", help="Mean Absolute Error: average absolute error")
         c3.metric("R²",   f"{r2:.2f}", help="R² (explained variance): closer to 1 is better")
 
         fig2 = px.scatter(
-            x=st.session_state.y_test,
+            x=y_true,
             y=preds,
             color=preds,
+            hover_data={"track_name": st.session_state.test_df["track_name"]},
             labels={"x": "Actual Popularity", "y": "Predicted Popularity"},
             title=model_choice,
             template="plotly_dark",
@@ -162,8 +166,8 @@ with tab2:
         st.plotly_chart(fig2, use_container_width=True)
 
         sample = pd.DataFrame({
-            "track":     df.loc[st.session_state.y_test.index, "track_name"].values,
-            "actual":    st.session_state.y_test.values,
+            "track": st.session_state.test_df["track_name"].values,
+            "actual": y_true.values,
             "predicted": np.round(preds, 1)
         }).head(10)
         st.subheader("Sample Predictions")
@@ -177,18 +181,18 @@ with tab3:
         st.info("Train the model first under 'Model Training & Evaluate'.")
     else:
         inputs = {}
-        cols = st.columns(len(st.session_state.X_test.columns))
-        for i, feat in enumerate(st.session_state.X_test.columns):
+        cols = st.columns(len(st.session_state.test_df[FEATURES]))
+        for i, feat in enumerate(st.session_state.test_df[FEATURES].columns):
             inputs[feat] = cols[i].slider(
                 feat,
                 float(df[feat].min()), float(df[feat].max()),
                 float(df[feat].mean())
             )
         if st.button("Predict Single Track"):
-            x_df = pd.DataFrame([inputs])[st.session_state.X_test.columns]
+            x_df = pd.DataFrame([inputs])[[*FEATURES]]
             if st.session_state.scaler:
-                x_scaled = st.session_state.scaler.transform(x_df)
-            else:
-                x_scaled = x_df.values
-            pop = st.session_state.model.predict(x_scaled)[0]
+                x_df = pd.DataFrame(
+                    st.session_state.scaler.transform(x_df), columns=FEATURES
+                )
+            pop = st.session_state.model.predict(x_df)[0]
             st.metric("Predicted Popularity", f"{pop:.1f}")
